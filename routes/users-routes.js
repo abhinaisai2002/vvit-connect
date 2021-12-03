@@ -1,11 +1,10 @@
 const express = require('express'); // for handling requests
-const validator = require('validator');
 const usersRouter = express.Router();
 const UserModel = require('../models/user');
 const bcyprt = require('bcrypt');
-const { create } = require('../models/user');
+const checkAuth = require('../middlewares/check-auth');
 
-usersRouter.get('/', async (req,res,next)=>{
+usersRouter.get('/',checkAuth, async (req,res,next)=>{
     let users;
     try{
         // querying the dabase,getting all the user documents
@@ -21,6 +20,27 @@ usersRouter.get('/', async (req,res,next)=>{
     res.send({users:users.map(user => user.toObject({getters:true}))})
 })
 
+usersRouter.get('/:id',checkAuth,async (req,res,next)=>{
+    const userId = req.params.id;
+    let user;
+    try{
+        user = await UserModel.findById(userId);
+    }catch(err){
+        return next({
+            error:"Could fetch details of user.Please try again.",
+            status:500
+        })
+    }
+    if(!user){
+        return next({
+            error:"There is no user for the provided Id.",
+            status:404
+        })
+    }
+    return res.json({
+        user:user.toObject({getters:true})
+    })
+})
 usersRouter.post('/signup',async (req,res,next)=>{
     const {
         fullname,
@@ -52,7 +72,7 @@ usersRouter.post('/signup',async (req,res,next)=>{
         })
     }
     // if he exists,sending a error response
-    if(!existingUser){
+    if(existingUser){
         return next({
             error:"User email already Exists.Try another one.",
             status:422
@@ -93,17 +113,17 @@ usersRouter.post('/login',async (req,res,next)=>{
     const {
         email,
         password
-    } = req.body;
-    const isValid = validateLogin(email,password);
+    } = req.body;//getting the data from the request body
+    const isValid = validateLogin(email,password);//checking the details are valid or not
     if(!isValid){
         return next({
             error:'The Entered Details are Invalid',
             status:422
         })
     }
-    let existingUser;
+    let existingUser;//getting the existing user for login
     try{
-        existingUser = await UserModel({email:email})
+        existingUser = await UserModel.findOne({email:email})
     }catch(err){
         return next({
             error:"Logging in failed.Please try again Later.",
@@ -116,7 +136,8 @@ usersRouter.post('/login',async (req,res,next)=>{
             status:403
         })
     }
-    let isPasswordValid = false;
+    let isPasswordValid = false;//checking the entered password is correct or not
+
     try{
         isPasswordValid = await bcyprt.compare(password,existingUser.password);
     }catch(err){
