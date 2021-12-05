@@ -10,7 +10,6 @@ const postSchema = mongoose.Schema({
     image:{type:String,required:true},
     like:{type:Number,default:0},
     comments:[{type:String,default:'Hi'}],
-
 })
 
 postSchema.plugin(postsValidator) // for unique field in the documents

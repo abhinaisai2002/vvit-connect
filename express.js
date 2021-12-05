@@ -6,10 +6,15 @@ const path = require('path');
 const postsRouter = require('./routes/posts-routes');
 const managerRoutes = require('./routes/manager-routes');
 require('dotenv').config(); // for loading the variables in the dot.env file
+const fs = require('fs');
+const bodyParser = require('body-parser');
+
 
 
 // a middleware function used to parse the json data in post requests
-app.use(express.json())
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 // a middleware that used to serve the static files from the server
 // generally the server will not share the files 
 app.use('/uploads/images', express.static(path.join('uploads','images')));
@@ -21,8 +26,15 @@ app.use((req,res,next)=>{
       'Access-Control-Allow-Headers',
       'Origin, X-Requested-With, Content-Type, Accept, Authorization'
     );
-    res.setHeader('Access-Control-Allow-Requests','POST, GET, PATCH, DELETE');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+
     next();
+})
+
+
+app.get('/erri',(req,res,next)=>{
+  res.hasHeader('Content-Type','text/html')
+  res.send("erripuk")
 })
 
 // all the users endpoints
@@ -34,7 +46,11 @@ app.use('/api/posts',postsRouter);
 // all the manager endpoints
 app.use('/api/managers/',managerRoutes);
 
+
+// a middleware function used for showing 404 pages for not available routes
 app.use((req,res,next)=>{
+  
+
   return next({
     error:'Could found this route.',
     status:404
@@ -45,6 +61,11 @@ app.use((req,res,next)=>{
 //sending error status codes from the server if any error occurs
 
 app.use((error,req,res,next)=>{
+    if (req.file) {
+      fs.unlink(req.file.path, (err) => {
+        console.log(err);
+      });
+    }
     res
     .status(error['status'] || 500)
     .json({

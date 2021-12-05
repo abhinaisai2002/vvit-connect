@@ -7,5 +7,14 @@ const managerSchema = new mongoose.Schema({
     image:{type:String,required:true,default:'/uploads/images/default.png'},
     posts:[{type:mongoose.Types.ObjectId,ref:'Post',required:true}]
 });
+
 managerSchema.plugin(managerValidator)
 module.exports = mongoose.model('Manager',managerSchema);
+
+
+/*
+manager1
+
+
+
+*/

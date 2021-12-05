@@ -4,11 +4,12 @@ const  Managers = require('../models/manager');
 const bcrypt = require('bcrypt'); // for password encryption
 const jwt = require('jsonwebtoken');
 const checkAuth = require('../middlewares/check-auth');
+const fileUpload = require('../middlewares/file-upload');
 
-managerRoutes.get('/',checkAuth, (req,res,next)=>{
+managerRoutes.get('/',checkAuth, async (req,res,next)=>{
     let managers;
     try{
-        //  fetching all the managers from the database
+        //fetching all the managers from the database
         managers = await Managers.find({});
     }catch(err){
         return next({
@@ -29,11 +30,13 @@ managerRoutes.get('/',checkAuth, (req,res,next)=>{
     })
 })
 
-managerRoutes.post('/signup',async (req,res,next)=>{
+
+
+managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
     const {
         name,email,password
     } = req.body;
-    const isValid = validateLogin(email,password) && name.trim().length>0;
+    const isValid = validateLogin(email,password) && name.toString().trim().length>0;
     if (!isValid) {
       return next({
         error: 'The Entered Details are Invalid',
@@ -70,7 +73,8 @@ managerRoutes.post('/signup',async (req,res,next)=>{
     const manager = new Managers({
         name,
         email,
-        password:hashedPassword
+        password:hashedPassword,
+        image:req.file.path
     })
     try {
       await manager.save();
@@ -176,7 +180,6 @@ const validateLogin = (email,password)=>{
     let emailRe = new RegExp(
         '[a-z0-9]*@vvit.net'
     );
-    console.log(emailRe.test(email))
     return emailRe.test(email) && password.length >=8
 }
 module.exports = managerRoutes

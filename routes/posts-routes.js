@@ -4,6 +4,7 @@ const Post = require('../models/posts')
 const Managers = require('../models/manager');
 const mongoose = require('mongoose');
 const checkAuth = require('../middlewares/check-auth');
+const fileUpload = require('../middlewares/file-upload');
 
 
 postsRouter.use(checkAuth);
@@ -29,7 +30,9 @@ postsRouter.get('/',async (req,res,next)=>{
         })
     }
 
-    return res.status(200).json({
+    return res
+            .status(200)
+            .json({
                 posts:posts
             })
 })
@@ -81,7 +84,9 @@ postsRouter.get('/manager/:mid',async (req,res,next)=>{
     })
 })
 
-postsRouter.post('/',async (req,res,next)=>{
+postsRouter.post('/',
+    fileUpload.single('image'),
+    async (req,res,next)=>{
     const {
         creator,
         description,
@@ -106,7 +111,7 @@ postsRouter.post('/',async (req,res,next)=>{
       createdBy:user.name,  
       creator: creator,
       description: description,
-      image: '/uploads/images/default.png',
+      image: req.file.path
     });
     try{
         const sess = await mongoose.startSession();
