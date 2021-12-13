@@ -1,22 +1,19 @@
 const express = require('express');
 const postsRouter = express.Router();
-const Post = require('../models/posts')
-const Managers = require('../models/manager');
+const Post = require('../models/Posts')
+const Managers = require('../models/Manager');
 const mongoose = require('mongoose');
 const checkAuth = require('../middlewares/check-auth');
 const fileUpload = require('../middlewares/file-upload');
+const UserModel = require('../models/User');
 
 
 postsRouter.use(checkAuth);
 
 postsRouter.get('/',async (req,res,next)=>{
     let posts;
-    let postss;
     try{
-        posts = await Post.find({})
-        postss = posts.map(async (post) => {
-            console.log(await post.populate('creator'));
-        })
+        posts = await Post.find().populate('creator');
     }catch(err){
         next({
             error:"Could not retrive posts.Please try again later.",
@@ -30,11 +27,7 @@ postsRouter.get('/',async (req,res,next)=>{
         })
     }
 
-    return res
-            .status(200)
-            .json({
-                posts:posts
-            })
+    return res.status(200).json({posts:posts})
 })
 
 postsRouter.get('/:pid',async (req,res,next)=>{
@@ -60,17 +53,16 @@ postsRouter.get('/:pid',async (req,res,next)=>{
 
 postsRouter.get('/manager/:mid',async (req,res,next)=>{
     const managerId = req.params.mid;
-    console.log(managerId);
-    let userWithPlaces;
+    let userWithPosts;
     try{
-        userWithPlaces = await Managers.findById(managerId).populate('posts')
+        userWithPosts = await Managers.findById(managerId).populate('posts')
     }catch(err){
         return next({
             error:"Fetching places failed.Please try again later.",
             status:500
         })
     }
-    if(!userWithPlaces || userWithPlaces.posts.length === 0){
+    if(!userWithPosts || userWithPosts.posts.length === 0){
         return next({
             error:"Could not find places for provide id.",
             status:404
@@ -78,22 +70,23 @@ postsRouter.get('/manager/:mid',async (req,res,next)=>{
     }
 
     return res.json({
-        places:userWithPlaces.posts.map(post => {
-            return post.toObject({getters:true})
-        })
+        manager : userWithPosts
     })
 })
 
-postsRouter.post('/',
-    fileUpload.single('image'),
-    async (req,res,next)=>{
+postsRouter.post('/',fileUpload.single('image'),async (req,res,next)=>{
+    if (!req.file) {
+      return next({
+        error: 'Please upload a image',
+        status: 400,
+      });
+    }
     const {
-        creator,
         description,
     } = req.body;
     let user;
     try{
-        user = await Managers.findById(creator)
+        user = await Managers.findById(req.userData.userId)
     }catch(err){
         return next({
             error:"Creating a post failed.Try Again later",
@@ -102,14 +95,13 @@ postsRouter.post('/',
     }
     if(!user){
         return next({
-            error:"Could find the user for the provided id.",
+            error:"You have no permissions to post any events!!!",
             status:404
         })   
     }
-    
-    const createdPost = new Post({
-      createdBy:user.name,  
-      creator: creator,
+    console.log(user);
+    const createdPost = new Post({  
+      creator: user._id,
       description: description,
       image: req.file.path
     });
@@ -121,7 +113,8 @@ postsRouter.post('/',
         await user.save({session:sess})
         await sess.commitTransaction();
     }catch(err){
-        next({
+        console.log(err)
+        return next({
             error:"Could not create a post.Try again later",
             status:500
         })
@@ -132,12 +125,13 @@ postsRouter.post('/',
     })
 })
 
-postsRouter.post('/delete/:pid',async (req,res,next)=>{
+postsRouter.delete('/delete/:pid',async (req,res,next)=>{
     const postId = req.params.pid;
 
     let post;
     try{
-        post = await (await Post.findById(postId)).populate('creator');
+        post = await Post.findById(postId);
+        user = await Managers.findById(req.userData.userId);
     }catch(err){
         next({
             error:"Something went wrong.Could not delete post.",
@@ -150,20 +144,160 @@ postsRouter.post('/delete/:pid',async (req,res,next)=>{
             status:404
         })
     }
-
+    if(req.userData.userId.toString() !== post.creator.toString()){
+        return next({
+            error:"You are not authorized to delele this post.",
+            status:403
+        })
+    }
     try{
         const sess = await mongoose.startSession();
         sess.startTransaction();
         await post.remove({session:sess});
-        post.creator.posts.pull(post)
-        await place.creator.save({session:sess});
-        sess.commitTransaction();
+        user.posts.pull(post)
+        await user.save({session:sess});
+        await sess.commitTransaction();
     }catch(err){
-        next({
+        console.log(err)
+        return next({
             error:"Something went wrong.Could not delete place.",
             status:500
         })
     }
+    return res.status(201).json({
+        message:"Delted post"
+    })
+})
+
+postsRouter.delete('/unlike/:pid',async (req,res,next)=>{
+    const pid = req.params.pid;
+    let post;
+    const userId = req.userData.userId;
+    let user;
+    try{
+        post = await Post.findById(pid);
+        user = await UserModel.findById(userId);
+    }catch(err){
+        return next({
+            error:"Something went wrong.Please try again later.",
+            status:500,
+        })
+    }
+    if(!post){
+        return next({
+            error:"There is not post for the specified id",
+            status:500
+        })
+    }
+    try{
+        const like = await post.likes.indexOf(user.id);
+        if(like == -1){
+            return next({
+                error:"You didnt liked this post.",
+                message:300
+            })
+        }else{
+            post.likes.pull(user);
+            await post.save();
+        }
+    }catch(err){
+        console.log(err);
+        return next({
+            error:"Something went wrong.Please try again later.",
+            status:500
+        })
+    }
+    if(!user){
+        return next({
+            error:"Something went wrong.Your are not allowed to like this post.Please try again later.",
+            status:500
+        })
+    }
+    res.status(200).json({
+        message:"Your unlike was saved for this post.",
+        likes:post.likes.length
+    })
+})
+
+postsRouter.post('/like/:pid', async (req, res, next) => {
+    const pid = req.params.pid;
+    let post;
+    const userId = req.userData.userId;
+    let user;
+    try {
+        post = await Post.findById(pid);
+        user = await UserModel.findById(userId);
+    } catch (err) {
+        return next({
+        error: 'Something went wrong.Please try again later.',
+        status: 500,
+        });
+    }
+    if (!post) {
+        return next({
+        error: 'There is not post for the specified id',
+        status: 500,
+        });
+    }
+    try {
+        const like = await post.likes.indexOf(user.id);
+        if (like == -1) {
+        post.likes.push(user);
+        await post.save();
+        } else {
+        return next({
+            error: 'You already liked this post.',
+            status: 300,
+        });
+        }
+    } catch (err) {
+        console.log(err);
+        return next({
+        error: 'Something went wrong.Please try again later.',
+        status: 500,
+        });
+    }
+    if (!user) {
+        return next({
+        error:
+            'Something went wrong.Your are not allowed to like this post.Please try again later.',
+        status: 500,
+        });
+    }
+    res.status(200).json({
+        message: 'Your like was saved for this post.',
+        likes: post.likes.length,
+    });
+});
+
+postsRouter.get('/likes/:pid',async (req,res,next)=>{
+    const pid = req.params.pid;
+    let post;
+    try{
+        post = await Post.findById(pid).populate('likes');
+    }catch(err){
+        return next({
+            error:"Something went wrong in the database.",
+            status:500
+        })
+    }
+    if(!post){
+        return next({
+            error:"There is no post for the specified id.",
+            status:404
+        })
+    }
+
+    res.status(200).json({
+        likes:post.likes.map(item => {
+            return {
+                fullname:item.fullname,
+                image:item.image,
+                email:item.email
+            }
+        })
+    })
+
 })
 
 module.exports = postsRouter

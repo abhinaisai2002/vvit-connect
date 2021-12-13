@@ -10,7 +10,8 @@ const fs = require('fs');
 const bodyParser = require('body-parser');
 
 
-
+// ejs engine for html
+app.set('view engine','ejs')
 // a middleware function used to parse the json data in post requests
 
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -63,7 +64,7 @@ app.use((req,res,next)=>{
 app.use((error,req,res,next)=>{
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
-        console.log(err);
+        //console.log(err);
       });
     }
     res

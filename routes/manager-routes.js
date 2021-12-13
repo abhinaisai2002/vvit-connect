@@ -1,6 +1,6 @@
 const express = require('express');
 const managerRoutes = express.Router();
-const  Managers = require('../models/manager');
+const  Managers = require('../models/Manager');
 const bcrypt = require('bcrypt'); // for password encryption
 const jwt = require('jsonwebtoken');
 const checkAuth = require('../middlewares/check-auth');
@@ -10,7 +10,7 @@ managerRoutes.get('/',checkAuth, async (req,res,next)=>{
     let managers;
     try{
         //fetching all the managers from the database
-        managers = await Managers.find({});
+        managers = await Managers.find().populate('posts');
     }catch(err){
         return next({
             error:"Could fetch all the managers.Please try again later.",
@@ -33,6 +33,12 @@ managerRoutes.get('/',checkAuth, async (req,res,next)=>{
 
 
 managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
+    if(!req.file){
+      return next({
+        error:"Please upload a image",
+        status:400
+      })
+    }
     const {
         name,email,password
     } = req.body;
@@ -46,7 +52,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
     let existingUser;
     // checking the user if he already exsits
     try {
-      existingUser = await Managers.findOne({ email: email });
+      existingUser = await Managers.findOne({ $or:[{email: email},{name:name.toUpperCase()}]});
     } catch (err) {
       return next({
         error: 'Signing Up failed.Please try again after sometime',
@@ -56,7 +62,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
     // if he exists,sending a error response
     if (existingUser) {
       return next({
-        error: 'User email already Exists.Try another one.',
+        error: 'User already Exists.Try another one.',
         status: 422,
       });
     }
@@ -66,12 +72,12 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
       hashedPassword = await bcrypt.hash(password, 12);
     } catch (err) {
       return next({
-        error: 'Could not create user.Please try again',
+        error: 'Could not create user.Please try again!',
         status: 500,
       });
     }
     const manager = new Managers({
-        name,
+        name:name.toUpperCase(),
         email,
         password:hashedPassword,
         image:req.file.path
@@ -80,7 +86,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
       await manager.save();
     } catch (err) {
       return next({
-        error: 'Could not create user.Please try again later.',
+        error: 'Could not create user.Please try again later.!!',
         status: 500,
       });
     }
@@ -97,7 +103,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
         );
     }catch(err){
       return next({
-        error: 'Could not create user.Please try again later.',
+        error: 'Could not create user.Please try again later.!!!',
         status: 500,
       });
     }
@@ -110,7 +116,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
 })
 managerRoutes.post('/login',async (req,res,next)=>{
     const {
-        email,password
+      email,password
     } = req.body;
     const isValid = validateLogin(email,password);
     if(!isValid){
@@ -119,31 +125,31 @@ managerRoutes.post('/login',async (req,res,next)=>{
             status:422
         })
     }
-    let existingUser; //getting the existing user for login
+    let manager; //getting the existing user for login
     try {
-      existingUser = await Managers.findOne({ email: email });
+      manager = await Managers.findOne({ email: email });
     } catch (err) {
       return next({
         error: 'Logging in failed.Please try again Later.',
         status: 500,
       });
     }
-    if (!existingUser) {
+    if (!manager) {
       return next({
         error: 'Invalid Credentials, could not login you.',
         status: 403,
       });
     }
     let isPasswordValid = false; //checking the entered password is correct or not
-
     try {
-      isPasswordValid = await bcyprt.compare(password, existingUser.password);
+      isPasswordValid = await bcrypt.compare(password,manager.password);
     } catch (err) {
       return next({
         error: 'Could not login you.Please try again later',
         status: 500,
       });
     }
+
     if (!isPasswordValid) {
       return next({
         error: 'Invalid Credentials, could not login you.',
@@ -163,14 +169,14 @@ managerRoutes.post('/login',async (req,res,next)=>{
       );
     } catch (err) {
       return next({
-        error: 'Could not create user.Please try again later.',
+        error: 'Could not login user.Please try again later.',
         status: 500,
       });
     }
 
     return res.status(200).json({
-      userId:existingUser.id,
-      email:existingUser.email,
+      userId:manager.id,
+      email:manager.email,
       token:token
     })
 })

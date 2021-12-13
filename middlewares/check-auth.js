@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const user = require('../models/User');
 // a middleware to verify the token is valid or not for authorizing the tasks
-module.exports = (req,res,next)=>{
+module.exports = async (req,res,next)=>{
     // a preflight req thats checks for cors policy, a options method
     if(req.method === 'OPTIONS'){
         return next();
@@ -12,7 +13,24 @@ module.exports = (req,res,next)=>{
             throw new Error('No Token');
         }
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
-        req.userData = {userId : decodedToken.userId};
+        console.log(decodedToken);
+        if(decodedToken.verified !== undefined){
+            let requester;
+            try{
+                requester = await user.findById(decodedToken.userId)
+            }catch(err){
+                return next({
+                    error:"Something went wrong.Please try again later."
+                })
+            }
+            if(!requester.verified){
+                return next({
+                    error:"Please verify your email.",
+                    status:403
+                })
+            }
+        }
+        req.userData = decodedToken
         next();
     }catch(err){
         return next({

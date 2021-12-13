@@ -1,15 +1,18 @@
 const express = require('express'); // for handling requests
 const usersRouter = express.Router();
-const UserModel = require('../models/user');
+const UserModel = require('../models/User');
 const bcyprt = require('bcrypt');
 const checkAuth = require('../middlewares/check-auth');
 const jwt = require('jsonwebtoken');
+const sendEmail = require('../emails/email');
+const fs = require('fs');
 
 usersRouter.get('/',checkAuth, async (req,res,next)=>{
     let users;
+    console.log(req.userData)
     try{
         // querying the dabase,getting all the user documents
-        users = await UserModel.find({},'-password')
+        users = await UserModel.find({ $and: [{section:req.userData.section,branch:req.userData.branch,year:req.userData.year}]},'-password')
     }
     catch(err){
         return next({
@@ -64,7 +67,7 @@ usersRouter.post('/signup',async (req,res,next)=>{
     let existingUser;
     // checking the user if he already exsits
     try{
-        existingUser = await UserModel.findOne({email:email});
+        existingUser = await UserModel.findOne({email:email.toLowerCase()});
     }
     catch(err){
         return next({
@@ -92,7 +95,7 @@ usersRouter.post('/signup',async (req,res,next)=>{
     //creating the usermodel
     const createdUser = new UserModel({
         fullname:fullname,
-        email:email,
+        email:email.toLowerCase(),
         branch:branch,
         year:year,
         password:hashedPassword,
@@ -114,19 +117,35 @@ usersRouter.post('/signup',async (req,res,next)=>{
         userId: createdUser.id,
         email: createdUser.email,
         name: createdUser.fullname,
+        section:createdUser.section,
+        branch:createdUser.branch,
+        year:createdUser.year,
+        verified:createdUser.verified
         },
         process.env.JWT_SECRET_KEY
     );
     } catch (err) {
     return next({
-        error: '1 Could not create user.Please try again later.',
-        status: 500,
-    });
+            error: '1 Could not create user.Please try again later.',
+            status: 500,
+        });
+    }
+
+    const url = `${process.env.BASE_URL}users/verify/${createdUser._id}/${token}`
+    try{
+        await sendEmail(email,"Verify email",url);
+    }catch(err){
+        return next({
+            error:"Something went wrong.Please try again later.",
+            status:500
+        })
     }
     res.send({
+        verified:createdUser.verified,
         userId:createdUser.id,
         userEmail:createdUser.email,
-        token:token
+        token:token,
+        message:"Please check your email to verify."
     });
 })
 
@@ -144,7 +163,7 @@ usersRouter.post('/login',async (req,res,next)=>{
     }
     let existingUser;//getting the existing user for login
     try{
-        existingUser = await UserModel.findOne({email:email})
+        existingUser = await UserModel.findOne({email:email.toLowerCase()})
     }catch(err){
         return next({
             error:"Logging in failed.Please try again Later.",
@@ -180,6 +199,10 @@ usersRouter.post('/login',async (req,res,next)=>{
         userId: existingUser.id,
         email: existingUser.email,
         name: existingUser.fullname,
+        section:existingUser.section,
+        branch:existingUser.branch,
+        year:existingUser.year,
+        verified:existingUser.verified,
         },
         process.env.JWT_SECRET_KEY
     );
@@ -190,10 +213,44 @@ usersRouter.post('/login',async (req,res,next)=>{
     });
     }
     return res.json({
+        verified:existingUser.verified,
         userEmail:existingUser.email,
         userId : existingUser.id,
         token:token
     })
+})
+
+usersRouter.get('/verify/:id/:token',async (req,res,next)=>{
+    let user;
+    try{
+        user = await UserModel.findById(req.params.id);
+    }catch(err){
+        console.log(err)
+        return next({
+            error:"Email verification failed.Please try again later.!!!",
+            status:500
+        })
+    }
+    try {
+        const decodedToken = jwt.verify(req.params.token, process.env.JWT_SECRET_KEY);
+        
+        if (user.verified === true) {
+            res.render('email-verify');
+            return ;
+        }
+
+        user.verified = true;
+        await user.save();
+        
+    } catch (err) {
+        console.log(err);
+        return next({
+            error: 'Email verification failed.Please try again later.!!',
+            status: 500,
+        });
+    }
+    res.render('email-verify')
+    return ;
 })
 
 const validateUserDetails = (fullname,email,password,year,branch,section) => {
