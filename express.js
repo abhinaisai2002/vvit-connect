@@ -9,6 +9,20 @@ require('dotenv').config(); // for loading the variables in the dot.env file
 const fs = require('fs');
 const bodyParser = require('body-parser');
 
+// a middleware function used to stop the cors policy security
+
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
+
+  next();
+});
+
+
 
 // ejs engine for html
 app.set('view engine','ejs')
@@ -19,24 +33,6 @@ app.use(bodyParser.json());
 // a middleware that used to serve the static files from the server
 // generally the server will not share the files 
 app.use('/uploads/images', express.static(path.join('uploads','images')));
-// a middleware function used to stop the cors policy security
-app.use((req,res,next)=>{
-    //allowing the browser to access all domains by the browser,headers in the request,methods by the request
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-    );
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE');
-
-    next();
-})
-
-
-app.get('/erri',(req,res,next)=>{
-  res.hasHeader('Content-Type','text/html')
-  res.send("erripuk")
-})
 
 // all the users endpoints
 app.use('/api/users',usersRoutes);
@@ -49,9 +45,7 @@ app.use('/api/managers/',managerRoutes);
 
 
 // a middleware function used for showing 404 pages for not available routes
-app.use((req,res,next)=>{
-  
-
+app.use((req,res,next)=>{  
   return next({
     error:'Could found this route.',
     status:404
