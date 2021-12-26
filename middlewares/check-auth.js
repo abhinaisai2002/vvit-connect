@@ -14,13 +14,20 @@ module.exports = async (req,res,next)=>{
         }
         const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
         console.log(decodedToken);
+        if( !decodedToken ){
+            return next({
+                error:"Not a valid user",
+                status:400
+            })
+        }
         if(decodedToken.verified !== undefined){
             let requester;
             try{
                 requester = await user.findById(decodedToken.userId)
             }catch(err){
                 return next({
-                    error:"Something went wrong.Please try again later."
+                    error:"Something went wrong.Please try again later.",
+                    status:500
                 })
             }
             if(!requester.verified){

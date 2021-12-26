@@ -28,10 +28,11 @@ app.use((req, res, next) => {
 app.set('view engine','ejs')
 // a middleware function used to parse the json data in post requests
 
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({extended:true}));
 app.use(bodyParser.json());
 // a middleware that used to serve the static files from the server
 // generally the server will not share the files 
+
 app.use('/uploads/images', express.static(path.join('uploads','images')));
 
 // all the users endpoints
@@ -39,6 +40,11 @@ app.use('/api/users',usersRoutes);
 
 // all the posts endpoints
 app.use('/api/posts',postsRouter);
+
+app.use((req,res,next)=>{
+  console.log(req.body);
+  next();
+})
 
 // all the manager endpoints
 app.use('/api/managers/',managerRoutes);

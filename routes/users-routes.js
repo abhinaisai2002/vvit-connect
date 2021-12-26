@@ -28,7 +28,7 @@ usersRouter.get('/:id',checkAuth,async (req,res,next)=>{
     const userId = req.params.id;
     let user;
     try{
-        user = await UserModel.findById(userId);
+        user = await UserModel.findById(userId,'-password');
     }catch(err){
         return next({
             error:"Could fetch details of user.Please try again.",
@@ -45,8 +45,9 @@ usersRouter.get('/:id',checkAuth,async (req,res,next)=>{
         user:user.toObject({getters:true})
     })
 })
+
 usersRouter.post('/signup',async (req,res,next)=>{
-    const {
+    let {
         fullname,
         email,
         password,
@@ -54,6 +55,7 @@ usersRouter.post('/signup',async (req,res,next)=>{
         branch,
         section
     } = req.body;
+    year = parseInt(year);
     // validating the information
     const isValid = validateUserDetails(fullname,email,password,year,branch,section)
 
@@ -140,12 +142,8 @@ usersRouter.post('/signup',async (req,res,next)=>{
             status:500
         })
     }
-    res.send({
-        verified:createdUser.verified,
-        userId:createdUser.id,
-        userEmail:createdUser.email,
-        token:token,
-        message:"Please check your email to verify."
+    res.status(200).send({
+        message:"Account created successfully,Please check your email to get verified."
     });
 })
 
@@ -172,8 +170,14 @@ usersRouter.post('/login',async (req,res,next)=>{
     }
     if(!existingUser){
         return next({
-            error:"Invalid Credentials, could not login you.",
+            error:"There is no user registered on this mail, could not login you.",
             status:403
+        })
+    }
+    if(!existingUser.verified){
+        return next({
+            error:"Please check the verification mail to activate your account.",
+            status:400
         })
     }
     let isPasswordValid = false;//checking the entered password is correct or not
@@ -188,31 +192,32 @@ usersRouter.post('/login',async (req,res,next)=>{
     }
     if(!isPasswordValid){
         return next({
-            error:"Invalid Credentials, could not login you.",
+            error:"Entered password is incorrect, could not login you.",
             status:403
         })
     }
     let token;
     try {
     token = jwt.sign(
-        {
-        userId: existingUser.id,
-        email: existingUser.email,
-        name: existingUser.fullname,
-        section:existingUser.section,
-        branch:existingUser.branch,
-        year:existingUser.year,
-        verified:existingUser.verified,
-        },
-        process.env.JWT_SECRET_KEY
-    );
+                {
+                    userId: existingUser.id,
+                    email: existingUser.email,
+                    name: existingUser.fullname,
+                    section:existingUser.section,
+                    branch:existingUser.branch,
+                    year:existingUser.year,
+                    verified:existingUser.verified,
+                },
+                process.env.JWT_SECRET_KEY
+            );
     } catch (err) {
-    return next({
-        error: 'Could not create user.Please try again later.',
-        status: 500,
-    });
+        return next({
+            error: 'Could not create user.Please try again later.',
+            status: 500,
+        });
     }
     return res.json({
+        userName:existingUser.fullname,
         verified:existingUser.verified,
         userEmail:existingUser.email,
         userId : existingUser.id,
@@ -257,7 +262,7 @@ const validateUserDetails = (fullname,email,password,year,branch,section) => {
     
     const isValid = validateLogin(email,password) &&
         fullname.length > 0 &&
-        1 <= year < 4 &&
+        1 <= year  &&  year <= 4
         !!(['CSE', 'ECE', 'IT', 'MECH', 'CE', 'EEE'].indexOf(branch) + 1) && 
         !!(['A', 'B', 'C', 'D'].indexOf(section));
     return isValid;

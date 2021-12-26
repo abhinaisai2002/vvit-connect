@@ -33,6 +33,7 @@ managerRoutes.get('/',checkAuth, async (req,res,next)=>{
 
 
 managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
+    console.log('manager');
     if(!req.file){
       return next({
         error:"Please upload a image",
@@ -109,9 +110,7 @@ managerRoutes.post('/signup',fileUpload.single('image'),async (req,res,next)=>{
     }
    
     res.status(201).json({
-      managerId : manager.id,
-      managerEmail : manager.email,
-      token:token
+      message:"Your account creation is in pending,ask your admin to activate"
     })
 })
 managerRoutes.post('/login',async (req,res,next)=>{
@@ -139,6 +138,12 @@ managerRoutes.post('/login',async (req,res,next)=>{
         error: 'Invalid Credentials, could not login you.',
         status: 403,
       });
+    }
+    if(!manager.verified){
+      return next({
+        error:"Your account activation is in pending.Please consult your admin.",
+        status:300
+      })
     }
     let isPasswordValid = false; //checking the entered password is correct or not
     try {
@@ -183,9 +188,7 @@ managerRoutes.post('/login',async (req,res,next)=>{
 
 
 const validateLogin = (email,password)=>{
-    let emailRe = new RegExp(
-        '[a-z0-9]*@vvit.net'
-    );
+    let emailRe = new RegExp('[a-zA-Z0-9]{3,}@(vvit.net|gmail.com)');
     return emailRe.test(email) && password.length >=8
 }
 module.exports = managerRoutes
